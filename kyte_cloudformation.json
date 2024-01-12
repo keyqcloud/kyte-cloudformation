@@ -1,0 +1,157 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "KyteSiteManagementTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": "kyteSiteManagementTopic"
+            }
+        },
+        "KyteDBTransactionTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": "kyteDBTransactionTopic"
+            }
+        },
+        "KyteSiteManagementLambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaSNSPublishPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "sns:Publish",
+                                    "Resource": [
+                                        {
+                                            "Ref": "KyteSiteManagementTopic"
+                                        },
+                                        {
+                                            "Ref": "KyteDBTransactionTopic"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "KytePythonLayer": {
+            "Type": "AWS::Lambda::LayerVersion",
+            "Properties": {
+                "LayerName": "KytePython",
+                "Content": {
+                    "S3Bucket": "PLACEHOLDER_FOR_S3_BUCKET_NAME",
+                    "S3Key": "kyte-python-api/stable/kytePython.zip"
+                },
+                "CompatibleRuntimes": [
+                    "python3.10"
+                ]
+            }
+        },
+        "KyteSiteManagementLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": "kyteSiteManagement",
+                "Runtime": "python3.10",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "KyteSiteManagementLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "S3Bucket": "PLACEHOLDER_FOR_S3_BUCKET_NAME",
+                    "S3Key": "kyte-site-management/lambda_function.zip"
+                },
+                "Handler": "lambda_function.lambda_handler",
+                "Environment": {
+                    "Variables": {
+                        "db_username": "test"
+                    }
+                },
+                "Timeout": 900,
+                "Layers": [
+                    {
+                        "Ref": "KytePythonLayer"
+                    }
+                ]
+            }
+        },
+        "KyteDatabaseTransactionLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": "kyteDatabaseTransaction",
+                "Runtime": "python3.10",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "KyteSiteManagementLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "S3Bucket": "PLACEHOLDER_FOR_S3_BUCKET_NAME",
+                    "S3Key": "kyte-database-transaction/lambda_function.zip"
+                },
+                "Handler": "lambda_function.lambda_handler",
+                "Environment": {
+                    "Variables": {
+                        "db_username": "test"
+                    }
+                },
+                "Timeout": 900,
+                "Layers": [
+                    {
+                        "Ref": "KytePythonLayer"
+                    }
+                ]
+            }
+        },
+        "KyteSiteManagementSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "KyteSiteManagementTopic"
+                },
+                "Protocol": "lambda",
+                "Endpoint": {
+                    "Fn::GetAtt": [
+                        "KyteSiteManagementLambda",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "KyteDatabaseTransactionSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "KyteDBTransactionTopic"
+                },
+                "Protocol": "lambda",
+                "Endpoint": {
+                    "Fn::GetAtt": [
+                        "KyteDatabaseTransactionLambda",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    }
+}
